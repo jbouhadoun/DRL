@@ -1,1 +1,1 @@
-# DRL
+# RL algorithms
