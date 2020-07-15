@@ -16,6 +16,7 @@ L'action i correspond à cocher la case i. Les cases sont numérotées comme sui
 
 current_state = {}
 player_id = 0
+human_player = False
 
 def get_possible_actions(state):
 	possible_actions = []
@@ -26,19 +27,27 @@ def get_possible_actions(state):
 	return possible_actions
 
 
-def reset () -> dict:
+def reset (human = False) -> dict:
 	global player_id
 	global current_state
+	global human_player
 
 	player_id = random.randint(0,1) # Choisir le joueur qui commence la partie (joueur 0 ou 1)
-
+	human_player = human
 	for i in range(nb_cells):
 		current_state[i] = ' '
 
 	if player_id == 1:
-		action = random.choice(get_possible_actions(current_state))
-		step(action)
-		#player_id = 0
+		if not human_player:
+			action = random.choice(get_possible_actions(current_state))
+		else:
+			render()
+			action = int(input("Choose action"))
+
+		current_state[action]=marks[player_id]
+		if human_player:
+			render()
+		player_id = 0
 
 
 	return array_to_str(current_state)
@@ -90,6 +99,7 @@ def is_terminal(state):
 def step(action):
 	global player_id
 	global current_state
+	global human_player
 
 	assert current_state[action] == ' ' and not is_terminal(current_state)
 	current_state[action] = marks[player_id] # Le joueur 'player_id' coche la case 'action'
@@ -103,17 +113,19 @@ def step(action):
 
 		else:
 			reward = 1
-		"""elif player_id == 0:
-			reward = 1
-		else:
-			reward = -1"""
 
 
 	else:
 		player_id = ( player_id + 1 ) % 2 # On passe la main à l'autre joueur
 		reward = 0
 
-		action = random.choice(get_possible_actions(current_state))
+		if not human_player:
+			action = random.choice(get_possible_actions(current_state))
+		else:
+			render()
+			action = int(input("Choose action"))
+			
+
 		current_state[action] = marks[player_id]
 		player_id = 0
 
@@ -124,10 +136,9 @@ def step(action):
 				reward = 0
 			else:
 				reward = -1
-			"""elif player_id == 0:
-				reward = 1
-			else:
-				reward = -1"""
+
+	if human_player:
+		render()
 
 	return array_to_str(current_state), reward, done
 

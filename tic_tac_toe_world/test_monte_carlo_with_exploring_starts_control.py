@@ -38,7 +38,7 @@ def monte_carlo_with_exploring_starts_control(
         a0 = np.random.choice(actions)
         s1, r1, t1 = step_func(a0)
 
-        s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history_v2(s1, pi, is_terminal_func,
+        s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history_v2z&é(s1, pi, is_terminal_func,
                                                                                          step_func, get_possible_actions,
                                                                                          max_steps_per_episode)
         s_list = [s0] + s_list

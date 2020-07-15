@@ -11,6 +11,8 @@ GAMMA = 0.99
 # Create gym and seed numpy
 env = gym.make('CartPole-v0')
 nA = env.action_space.n
+print(nA)
+print(env.action_space.shape)
 np.random.seed(1)
 
 # Init weight

@@ -1,5 +1,6 @@
 from typing import Callable
 from tic_tac_toe_world import *
+import matplotlib.pyplot as plt
 
 def tabular_q_learning_control(
         reset_func: Callable,
@@ -20,7 +21,7 @@ def tabular_q_learning_control(
         if is_terminal_func(s):
             q[s, :] = 0.0"""
 
-
+    learning_rates = []
     for episode_id in range(episodes_count):
         s = reset_func()
         step = 0
@@ -44,49 +45,59 @@ def tabular_q_learning_control(
         		q[s_p]=np.random.random(action_dim)
 	        possible_actions = get_possible_actions(s_p)
 
-	        for action in range(action_dim):
+	        for action in range(action_dim):  
 	        	if action not in possible_actions:
 	        		q[s_p][action] = -999999
 	        q[s][a] += alpha * (r + gamma * np.max(q[s_p]) - q[s][a])
 	        s = s_p
 	        step += 1
+        pi = {}
+        for s in q.keys():
+            pi[s] = np.zeros(action_dim)
+            pi[s][np.argmax(q[s])] = 1.0
+        learning_rates.append(eval(pi)[0])
 
-    pi = {}
-    for s in q.keys():
-        pi[s] = np.zeros(action_dim)
-        pi[s][np.argmax(q[s])] = 1.0
+    
 
-    return q, pi
+    return q, pi, learning_rates
+
+def eval(Pi,nb_episodes_test = 100, human = False):
+    done = False
+    state = reset()
+    successes = 0
+    fails = 0
+    action_dim = 9
+    for i in range(nb_episodes_test):
+        state = reset(human=human)
+        done = False
+        while not done:
+            if state in Pi.keys():
+                action = np.random.choice(np.arange(action_dim), p=Pi[state])
+            else:
+                action = np.random.choice(get_possible_actions(state))
+
+            state, reward, done = step(action) 
+            if reward == 1:
+                successes +=1
+            elif reward == -1:
+                fails+=1
+
+
+    return (successes*1.0/nb_episodes_test, fails*1.0/nb_episodes_test)
+
 
 if __name__ == "__main__":
-    Q, Pi = tabular_q_learning_control(reset,
+    Q, Pi, learning_rates = tabular_q_learning_control(reset,
                                        is_terminal, step,
                                        get_possible_actions,
                                        epsilon=0.75,
                                        max_steps_per_episode=100)
     print(Q)
     print(Pi)
-
-    done = False
-    state = reset()
-    nb_episodes_test = 1000
-    successes = 0
-    fails = 0
-    action_dim = 9
-    for i in range(nb_episodes_test):
-    	state = reset()
-    	done = False
-    	while not done:
-    		if state in Pi.keys():
-    			action = np.random.choice(np.arange(action_dim), p=Pi[state])
-    		else:
-    			action = np.random.choice(get_possible_actions(state))
-
-    		state, reward, done = step(action)
-    		if reward == 1:
-    			successes +=1
-    		elif reward == -1:
-    			fails+=1
+    success_rate, failure_rate = eval(Pi)
+    print( "Success rate: ", success_rate, "Failure rate: ", failure_rate)
+    plt.plot(learning_rates)
+    plt.show()
 
 
-    print("Success rate: ", successes*1.0/nb_episodes_test, "Failure rate: ", fails*1.0/nb_episodes_test)
+    
