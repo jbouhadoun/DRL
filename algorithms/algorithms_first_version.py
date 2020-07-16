@@ -1,11 +1,9 @@
 from typing import Callable
 
-import matplotlib.pyplot as plt
 import numpy as np
 import random
-import os
 
-from policies import *
+from policies import tabular_uniform_random_policy
 from utils import *
 
 
@@ -143,20 +141,61 @@ def value_iteration(
 
 
 def first_visit_monte_carlo_prediction(
+        pi: np.ndarray,
+        is_terminal_func: Callable,
+        reset_func: Callable,
+        step_func: Callable,
+        episodes_count: int = 100000,
+        max_steps_per_episode: int = 100,
+        gamma: float = 0.99,
+        exploring_start: bool = False
+) -> np.ndarray:
+    states = np.arange(pi.shape[0])
+    V = np.random.random(pi.shape[0])
+    for s in states:
+        if is_terminal_func(s):
+            V[s] = 0
+    returns = np.zeros(V.shape[0])
+    returns_count = np.zeros(V.shape[0])
+    for episode_id in range(episodes_count):
+        s0 = np.random.choice(states) if exploring_start else reset_func()
+        s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history(s0, pi, is_terminal_func,
+                                                                                         step_func,
+                                                                                         max_steps_per_episode)
+        G = 0
+        for t in reversed(range(len(s_list))):
+            G = gamma * G + r_list[t]
+            st = s_list[t]
+            if st in s_list[0:t]:
+                continue
+            returns[st] += G
+            returns_count[st] += 1
+            V[st] = returns[st] / returns_count[st]
+    return V
+
+
+def first_visit_monte_carlo_prediction_v2(
         pi: dict,
         is_terminal_func: Callable,
         reset_func: Callable,
         step_func: Callable,
-        get_possible_actions: Callable,
         episodes_count: int = 100000,
         max_steps_per_episode: int = 100,
         gamma: float = 0.99,
-        exploring_start: bool = False,
-        action_dim: int = 9,
+        exploring_start: bool = False
 ) -> np.ndarray:
+    #states = np.arange(pi.shape[0])
+    #V = np.random.random(pi.shape[0])
 
     pi = {}
     V = {}
+
+    """for s in states:
+        if is_terminal_func(s):
+            V[s] = 0"""
+
+    # returns = np.zeros(V.shape[0])
+    # returns_count = np.zeros(V.shape[0])
 
     returns = {}
     returns_count = {}
@@ -165,9 +204,9 @@ def first_visit_monte_carlo_prediction(
         # s0 = np.random.choice(states) if exploring_start else reset_func()
 
         s0 =  reset_func()
-        s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history(s0, pi, is_terminal_func,
+        s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history_v2(s0, pi, is_terminal_func,
                                                                                          step_func, get_possible_actions,
-                                                                                         max_steps_per_episode, action_dim = action_dim)
+                                                                                         max_steps_per_episode)
         G = 0
         for t in reversed(range(len(s_list))):
             G = gamma * G + r_list[t]
@@ -184,29 +223,73 @@ def first_visit_monte_carlo_prediction(
 
 
 def monte_carlo_with_exploring_starts_control(
+        states_count: int,
+        actions_count: int,
+        is_terminal_func: Callable,
+        step_func: Callable,
+        episodes_count: int = 10000,
+        max_steps_per_episode: int = 100,
+        gamma: float = 0.99,
+) -> (np.ndarray, np.ndarray):
+    states = np.arange(states_count)
+    actions = np.arange(actions_count)
+    pi = tabular_uniform_random_policy(states_count, actions_count)
+    q = np.random.random((states_count, actions_count))
+    for s in states:
+        if is_terminal_func(s):
+            q[s, :] = 0.0
+            pi[s, :] = 0.0
+
+    returns = np.zeros((states_count, actions_count))
+    returns_count = np.zeros((states_count, actions_count))
+    for episode_id in range(episodes_count):
+        s0 = np.random.choice(states)
+
+        if is_terminal_func(s0):
+            continue
+
+        a0 = np.random.choice(actions)
+        s1, r1, t1 = step_func(s0, a0)
+
+        s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history(s1, pi, is_terminal_func,
+                                                                                         step_func,
+                                                                                         max_steps_per_episode)
+        s_list = [s0] + s_list
+        a_list = [a0] + a_list
+        r_list = [r1] + r_list
+
+        G = 0
+        for t in reversed(range(len(s_list))):
+            G = gamma * G + r_list[t]
+            st = s_list[t]
+            at = a_list[t]
+
+            if (st, at) in zip(s_list[0:t], a_list[0:t]):
+                continue
+            returns[st, at] += G
+            returns_count[st, at] += 1
+            q[st, at] = returns[st, at] / returns_count[st, at]
+            pi[st, :] = 0.0
+            pi[st, np.argmax(q[st, :])] = 1.0
+    return q, pi
+
+
+def monte_carlo_with_exploring_starts_control_v2(
         is_terminal_func: Callable,
         step_func: Callable,
         reset_func: Callable,
         get_possible_actions: Callable,
         get_random_state: Callable,
         set_current_state: Callable,
-        episodes_count: int = 1000,
-        max_steps_per_episode: int = 10,
-        eval_results = True,
+        episodes_count: int = 1000000,
+        max_steps_per_episode: int = 100,
         gamma: float = 0.99,
-        action_dim: int = 9,
 ) -> (np.ndarray, np.ndarray):
 
  
     pi = {}
     q = {}
-    if eval_results:
-    	directory = 'Data/'
-    	if not os.path.exists(directory):
-    		os.makedirs(directory)
-    	results_file = open(directory+'monte_carlo_with_exploring_starts_control_results.txt', "w") 
-    	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-    	results_file.write(f"{successes} {fails} {steps} {rewards}\n")
+    action_dim = 9
 
     returns = {}
     returns_count = {} 
@@ -223,9 +306,9 @@ def monte_carlo_with_exploring_starts_control(
         a0 = np.random.choice(actions)
         s1, r1, t1, _ = step_func(a0)
 
-        s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history(s1, pi, is_terminal_func,
+        s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history_v2(s1, pi, is_terminal_func,
                                                                                          step_func, get_possible_actions,
-                                                                                         max_steps_per_episode, action_dim = action_dim)
+                                                                                         max_steps_per_episode)
         s_list = [s0] + s_list
         a_list = [a0] + a_list
         r_list = [r1] + r_list
@@ -256,46 +339,77 @@ def monte_carlo_with_exploring_starts_control(
             pi[st]= np.zeros(action_dim)
             
             pi[st][np.argmax(q[st])] = 1.0
-        if eval_results:
-        	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-        	results_file.write(f"{successes} {fails} {steps} {rewards}\n")
-    if eval_results:
-    	results_file.close()
     return q, pi
 
 
-
 def on_policy_first_visit_monte_carlo_control(
+        states_count: int,
+        actions_count: int,
         reset_func: Callable,
         is_terminal_func: Callable,
         step_func: Callable,
-        get_possible_actions: Callable,
-        episodes_count: int = 1000,
-        max_steps_per_episode: int = 10,
+        episodes_count: int = 10000,
+        max_steps_per_episode: int = 100,
         epsilon: float = 0.2,
-        eval_results: bool = True,
         gamma: float = 0.99,
-        action_dim: int = 9,
 ) -> (np.ndarray, np.ndarray):
+    states = np.arange(states_count)
+    pi = tabular_uniform_random_policy(states_count, actions_count)
+    q = np.random.random((states_count, actions_count))
+    for s in states:
+        if is_terminal_func(s):
+            q[s, :] = 0.0
+            pi[s, :] = 0.0
 
-    pi = {}
-    q = {}
-    if eval_results:
-    	directory = 'Data/'
-    	if not os.path.exists(directory):
-    		os.makedirs(directory)
-    	results_file = open(directory+'on_policy_first_visit_monte_carlo_control_results.txt', "w") 
-
-    returns = {} # np.zeros((states_count, actions_count))
-    returns_count = {} # np.zeros((states_count, actions_count))
-
+    returns = np.zeros((states_count, actions_count))
+    returns_count = np.zeros((states_count, actions_count))
     for episode_id in range(episodes_count):
         s0 = reset_func()
 
         s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history(s0, pi, is_terminal_func,
+                                                                                         step_func,
+                                                                                         max_steps_per_episode)
+
+        G = 0
+        for t in reversed(range(len(s_list))):
+            G = gamma * G + r_list[t]
+            st = s_list[t]
+            at = a_list[t]
+
+            if (st, at) in zip(s_list[0:t], a_list[0:t]):
+                continue
+            returns[st, at] += G
+            returns_count[st, at] += 1
+            q[st, at] = returns[st, at] / returns_count[st, at]
+            pi[st, :] = epsilon / actions_count
+            pi[st, np.argmax(q[st, :])] = 1.0 - epsilon + epsilon / actions_count
+    return q, pi
+
+def on_policy_first_visit_monte_carlo_control_v2(
+        reset_func: Callable,
+        is_terminal_func: Callable,
+        step_func: Callable,
+        get_possible_actions: Callable,
+        episodes_count: int = 10000,
+        max_steps_per_episode: int = 100,
+        epsilon: float = 0.2,
+        gamma: float = 0.99,
+) -> (np.ndarray, np.ndarray):
+
+    pi = {}
+    q = {}
+
+    returns = {} # np.zeros((states_count, actions_count))
+    returns_count = {} # np.zeros((states_count, actions_count))
+
+    action_dim = 9
+
+    for episode_id in range(episodes_count):
+        s0 = reset_func()
+
+        s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history_v2(s0, pi, is_terminal_func,
                                                                                          step_func, get_possible_actions,
-                                                                                         max_steps_per_episode,
-                                                                                         action_dim = action_dim)
+                                                                                         max_steps_per_episode)
 
         G = 0
         for t in reversed(range(len(s_list))):
@@ -321,29 +435,68 @@ def on_policy_first_visit_monte_carlo_control(
                     pi[st][a] = 0
                     q[st][a] = -999999
             pi[st][np.argmax(q[st])] = 1.0 - epsilon + epsilon / len(possible_actions)
-            if eval_results:
-            	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-            	results_file.write(f"{successes} {fails} {steps} {rewards}\n")
-
-    if eval_results:
-    	results_file.close()
-
     return q, pi
 
 
-
-
 def off_policy_monte_carlo_control(
+        states_count: int,
+        actions_count: int,
+        reset_func: Callable,
+        is_terminal_func: Callable,
+        step_func: Callable,
+        episodes_count: int = 10000,
+        max_steps_per_episode: int = 100,
+        epsilon: float = 0.2,
+        gamma: float = 0.99,
+) -> (np.ndarray, np.ndarray):
+    states = np.arange(states_count)
+    b = tabular_uniform_random_policy(states_count, actions_count)
+    pi = np.zeros((states_count, actions_count))
+    C = np.zeros((states_count, actions_count))
+    q = np.random.random((states_count, actions_count))
+    for s in states:
+        if is_terminal_func(s):
+            q[s, :] = 0.0
+            pi[s, :] = 0.0
+        pi[s, :] = 0.0
+        pi[s, np.argmax(q[s, :])] = 1.0
+
+    for episode_id in range(episodes_count):
+        s0 = reset_func()
+
+        s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history(s0, b, is_terminal_func,
+                                                                                         step_func,
+                                                                                         max_steps_per_episode)
+
+        G = 0
+        W = 1
+        for t in reversed(range(len(s_list))):
+            G = gamma * G + r_list[t]
+            st = s_list[t]
+            at = a_list[t]
+
+            C[st, at] += W
+
+            q[st, at] += W / C[st, at] * (G - q[st, at])
+            pi[st, :] = 0.0
+            pi[st, np.argmax(q[st, :])] = 1.0
+
+            if at != np.argmax(q[st, :]):
+                break
+
+            W = W / b[st, at]
+
+    return q, pi
+
+def off_policy_monte_carlo_control_v2(
         reset_func: Callable,
         is_terminal_func: Callable,
         step_func: Callable,
         get_possible_actions: Callable,
         episodes_count: int = 10000,
-        max_steps_per_episode: int = 10,
+        max_steps_per_episode: int = 100,
         epsilon: float = 0.2,
-        eval_results: bool = True,
         gamma: float = 0.99,
-        action_dim: int = 9,
 ) -> (np.ndarray, np.ndarray):
 
 
@@ -351,19 +504,14 @@ def off_policy_monte_carlo_control(
     pi = {}
     C = {}
     q = {}
-    if eval_results:
-    	directory = 'Data/'
-    	if not os.path.exists(directory):
-    		os.makedirs(directory)
-    	results_file = open(directory+'off_policy_monte_carlo_control_results.txt', "w") 
+    action_dim = 9
 
     for episode_id in range(episodes_count):
         s0 = reset_func()
 
-        s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history(s0, b, is_terminal_func,
+        s_list, a_list, _, r_list = step_until_the_end_of_the_episode_and_return_history_v2(s0, b, is_terminal_func,
                                                                                          step_func, get_possible_actions,
-                                                                                         max_steps_per_episode,
-                                                                                         action_dim = action_dim)
+                                                                                         max_steps_per_episode)
 
         G = 0
         W = 1
@@ -391,12 +539,6 @@ def off_policy_monte_carlo_control(
                 break
 
             W = W / b[st][at]
-        if eval_results:
-        	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-        	results_file.write(f"{successes} {fails} {steps} {rewards}\n")
-
-    if eval_results:
-    	results_file.close()
 
     return q, pi
 
@@ -406,19 +548,13 @@ def tabular_td_zero_prediction(
         reset_func: Callable,
         step_func: Callable,
         episodes_count: int = 100000,
-        eval_results: bool = True,
         max_steps_per_episode: int = 100,
         gamma: float = 0.99,
-        alpha: float = 0.01,
+        alpha: float = 0.01
 ) -> np.ndarray:
     states = np.arange(pi.shape[0])
     actions = np.arange(pi.shape[1])
     V = np.random.random(pi.shape[0])
-    if eval_results:
-    	directory = 'Data/'
-    	if not os.path.exists(directory):
-    		os.makedirs(directory)
-    	results_file = open(directory+'tabular_TD0_results.txt', "w") 
     for s in states:
         if is_terminal_func(s):
             V[s] = 0
@@ -437,27 +573,64 @@ def tabular_td_zero_prediction(
     return V
 
 
-
 def tabular_sarsa_control(
+        states_count: int,
+        actions_count: int,
+        reset_func: Callable,
+        is_terminal_func: Callable,
+        step_func: Callable,
+        episodes_count: int = 50000,
+        max_steps_per_episode: int = 100,
+        epsilon: float = 0.2,
+        alpha: float = 0.1,
+        gamma: float = 0.99,
+) -> (np.ndarray, np.ndarray):
+    states = np.arange(states_count)
+    actions = np.arange(actions_count)
+    q = np.random.random((states_count, actions_count))
+    for s in states:
+        if is_terminal_func(s):
+            q[s, :] = 0.0
+
+    for episode_id in range(episodes_count):
+        s = reset_func()
+        rdm = np.random.random()
+        a = np.random.choice(actions) if rdm < epsilon else np.argmax(q[s, :])
+        step = 0
+        while not is_terminal_func(s) and step < max_steps_per_episode:
+            (s_p, r, t) = step_func(s, a)
+            rdm = np.random.random()
+            a_p = np.random.choice(actions) if rdm < epsilon else np.argmax(q[s_p, :])
+            q[s, a] += alpha * (r + gamma * q[s_p, a_p] - q[s, a])
+            s = s_p
+            a = a_p
+            step += 1
+
+    pi = np.zeros_like(q)
+    for s in states:
+        pi[s, :] = epsilon / actions_count
+        pi[s, np.argmax(q[s, :])] = 1.0 - epsilon + epsilon / actions_count
+
+    return q, pi
+
+def tabular_sarsa_control_v2(
         reset_func: Callable,
         is_terminal_func: Callable,
         step_func: Callable,
         get_possible_actions: Callable,
         episodes_count: int = 100000,
-        max_steps_per_episode: int = 10,
-        eval_results: bool = True,
+        max_steps_per_episode: int = 100,
         epsilon: float = 0.2,
         alpha: float = 0.1,
         gamma: float = 0.99,
-        action_dim: int = 9,
 ) -> (np.ndarray, np.ndarray):
-
+    #states = np.arange(states_count)
+    #actions = np.arange(actions_count)
     q = {} # np.random.random((states_count, actions_count))
-    if eval_results:
-    	directory = 'Data/'
-    	if not os.path.exists(directory):
-    		os.makedirs(directory)
-    	results_file = open(directory+'tabular_sarsa_results.txt', "w") 
+    action_dim = 9
+    """for s in states:
+        if is_terminal_func(s):
+            q[s, :] = 0.0"""
 
     for episode_id in range(episodes_count):
 
@@ -494,41 +667,64 @@ def tabular_sarsa_control(
                 possible_actions = range(action_dim)
             a_p = np.random.choice(possible_actions) if rdm < epsilon else np.argmax(q[s_p])
             q[s][a] += alpha * (r + gamma * q[s_p][a_p] - q[s][a])
-            
-            step += 1
             s = s_p
             a = a_p
+            step += 1
 
-        if eval_results:
-            	pi = {} # np.zeros_like(q)
-            	for s in q.keys():
-            		possible_actions = get_possible_actions(s)
-            		if not is_terminal_func(s):
-            			pi[s] = np.ones(action_dim) * (epsilon / len(possible_actions))
-            			for action in range(action_dim):
-            				if action not in possible_actions:
-            					pi[s][action] = 0
-            			pi[s][np.argmax(q[s])] = 1.0 - epsilon + epsilon / len(possible_actions)
-            	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-            	results_file.write(f"{successes} {fails} {steps} {rewards}\n")
-
-
-    if eval_results:
-    	results_file.close()
-    else:
-	    pi = {} # np.zeros_like(q)
-	    for s in q.keys():
-	        possible_actions = get_possible_actions(s)
-	        if not is_terminal_func(s):
-	            pi[s] = np.ones(action_dim) * (epsilon / len(possible_actions))
-	            for action in range(action_dim):
-	                if action not in possible_actions:
-	                    pi[s][action] = 0
-	            pi[s][np.argmax(q[s])] = 1.0 - epsilon + epsilon / len(possible_actions)
+    pi = {} # np.zeros_like(q)
+    for s in q.keys():
+        possible_actions = get_possible_actions(s)
+        if not is_terminal_func(s):
+            pi[s] = np.ones(action_dim) * (epsilon / len(possible_actions))
+            for action in range(action_dim):
+                if action not in possible_actions:
+                    pi[s][action] = 0
+            pi[s][np.argmax(q[s])] = 1.0 - epsilon + epsilon / len(possible_actions)
 
     return q, pi
 
 def tabular_expected_sarsa_control(
+        states_count: int,
+        actions_count: int,
+        reset_func: Callable,
+        is_terminal_func: Callable,
+        step_func: Callable,
+        episodes_count: int = 50000,
+        max_steps_per_episode: int = 100,
+        epsilon: float = 0.2,
+        alpha: float = 0.1,
+        gamma: float = 0.99,
+) -> (np.ndarray, np.ndarray):
+    states = np.arange(states_count)
+    actions = np.arange(actions_count)
+    q = np.random.random((states_count, actions_count))
+    for s in states:
+        if is_terminal_func(s):
+            q[s, :] = 0.0
+
+    for episode_id in range(episodes_count):
+        s = reset_func()
+        rdm = np.random.random()
+        a = np.random.choice(actions) if rdm < epsilon else np.argmax(q[s, :])
+        step = 0
+        while not is_terminal_func(s) and step < max_steps_per_episode:
+            (s_p, r, t) = step_func(s, a)
+            rdm = np.random.random()
+            a_p = np.random.choice(actions) if rdm < epsilon else np.argmax(q[s_p, :])
+            expected_value = np.mean(q[s_p,:])
+            q[s, a] += alpha * (r + gamma * expected_value - q[s, a])
+            s = s_p
+            a = a_p
+            step += 1
+
+    pi = np.zeros_like(q)
+    for s in states:
+        pi[s, :] = epsilon / actions_count
+        pi[s, np.argmax(q[s, :])] = 1.0 - epsilon + epsilon / actions_count
+
+    return q, pi
+
+def tabular_expected_sarsa_control_v2(
         reset_func: Callable,
         is_terminal_func: Callable,
         step_func: Callable,
@@ -536,17 +732,16 @@ def tabular_expected_sarsa_control(
         episodes_count: int = 100,
         max_steps_per_episode: int = 100,
         epsilon: float = 0.2,
-        eval_results: bool = True,
         alpha: float = 0.1,
         gamma: float = 0.99,
-        action_dim: int = 9,
 ) -> (np.ndarray, np.ndarray):
-    q = {}
-    if eval_results:
-    	directory = 'Data/'
-    	if not os.path.exists(directory):
-    		os.makedirs(directory)
-    	results_file = open(directory+'expected_sarsa_results.txt', "w") 
+    #states = np.arange(states_count)
+    #actions = np.arange(actions_count)
+    q = {} # np.random.random((states_count, actions_count))
+    action_dim = 9
+    """for s in states:
+        if is_terminal_func(s):
+            q[s, :] = 0.0"""
 
     for episode_id in range(episodes_count):
 
@@ -587,58 +782,73 @@ def tabular_expected_sarsa_control(
             s = s_p
             step += 1
 
-        if eval_results:
-            	pi = {} # np.zeros_like(q)
-            	for s in q.keys():
-            		possible_actions = get_possible_actions(s)
-            		if not is_terminal_func(s):
-            			pi[s] = np.ones(action_dim) * (epsilon / len(possible_actions))
-            			for action in range(action_dim):
-            				if action not in possible_actions:
-            					pi[s][action] = 0
-            					q[s][action] = -999999
-            			pi[s][np.argmax(q[s])] = 1.0 - epsilon + epsilon / len(possible_actions)
-            	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-            	results_file.write(f"{successes} {fails} {steps} {rewards}\n")
+    pi = {} # np.zeros_like(q)
+    for s in q.keys():
+        possible_actions = get_possible_actions(s)
+        if not is_terminal_func(s):
+            pi[s] = np.ones(action_dim) * (epsilon / len(possible_actions))
+            for action in range(action_dim):
+                if action not in possible_actions:
+                    pi[s][action] = 0
+                    q[s][action] = -999999
+            pi[s][np.argmax(q[s])] = 1.0 - epsilon + epsilon / len(possible_actions)
 
-    if not eval_results:
-	    pi = {} 
-	    for s in q.keys():
-	        possible_actions = get_possible_actions(s)
-	        if not is_terminal_func(s):
-	            pi[s] = np.ones(action_dim) * (epsilon / len(possible_actions))
-	            for action in range(action_dim):
-	                if action not in possible_actions:
-	                    pi[s][action] = 0
-	                    q[s][action] = -999999
-	            pi[s][np.argmax(q[s])] = 1.0 - epsilon + epsilon / len(possible_actions)
-    else:
-    	results_file.close()
+    return q, pi
+
+def tabular_q_learning_control(
+        states_count: int,
+        actions_count: int,
+        reset_func: Callable,
+        is_terminal_func: Callable,
+        step_func: Callable,
+        episodes_count: int = 50000,
+        max_steps_per_episode: int = 100,
+        epsilon: float = 0.2,
+        alpha: float = 0.1,
+        gamma: float = 0.99,
+) -> (np.ndarray, np.ndarray):
+    states = np.arange(states_count)
+    actions = np.arange(actions_count)
+    q = np.random.random((states_count, actions_count))
+    for s in states:
+        if is_terminal_func(s):
+            q[s, :] = 0.0
+
+    for episode_id in range(episodes_count):
+        s = reset_func()
+        step = 0
+        while not is_terminal_func(s) and step < max_steps_per_episode:
+            rdm = np.random.random()
+            a = np.random.choice(actions) if rdm < epsilon else np.argmax(q[s, :])
+            (s_p, r, t) = step_func(s, a)
+            q[s, a] += alpha * (r + gamma * np.max(q[s_p, :]) - q[s, a])
+            s = s_p
+            step += 1
+
+    pi = np.zeros_like(q)
+    for s in states:
+        pi[s, :] = 0.0
+        pi[s, np.argmax(q[s, :])] = 1.0
 
     return q, pi
 
 
-def tabular_q_learning_control(
+def tabular_q_learning_control_v2(
         reset_func: Callable,
         is_terminal_func: Callable,
         step_func: Callable,
         get_possible_actions: Callable,
-        episodes_count: int = 50,
-        max_steps_per_episode: int = 10,
+        episodes_count: int = 50000,
+        max_steps_per_episode: int = 100,
         epsilon: float = 0.2,
         alpha: float = 0.1,
         gamma: float = 0.99,
-        eval_results: bool = True,
-        action_dim = 9
+        eval_results: bool = False
 ) -> (np.ndarray, np.ndarray):
-
+    action_dim = 9
     q = {} 
-    if eval_results:
-    	directory = 'Data/'
-    	if not os.path.exists(directory):
-    		os.makedirs(directory)
-    	results_file = open(directory+'tabular_q_learning_results.txt', "w")
 
+    learning_rates = []
     for episode_id in range(episodes_count):
         s = reset_func()
         step = 0
@@ -673,44 +883,35 @@ def tabular_q_learning_control(
             for s in q.keys():
                 pi[s] = np.zeros(action_dim)
                 pi[s][np.argmax(q[s])] = 1.0
-            successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-            results_file.write(f"{successes} {fails} {steps} {rewards}\n")
+            learning_rates.append(eval(pi, reset_func, step_func, get_possible_actions)[0])
 
     if not eval_results:
         pi = {}
         for s in q.keys():
             pi[s] = np.zeros(action_dim)
             pi[s][np.argmax(q[s])] = 1.0
-    else:
-    	results_file.close()
-    
 
-    return q, pi, None
+    return q, pi, learning_rates
 
 
 
 
-def dyna_q_control(
+def dyna_q_control_v2(
         reset_func: Callable,
         is_terminal_func: Callable,
         step_func: Callable,
         get_possible_actions: Callable,
         episodes_count: int = 10000,
-        max_steps_per_episode: int = 10,
-        eval_results: bool = True,
+        max_steps_per_episode: int = 100,
         epsilon: float = 0.2,
         alpha: float = 0.1,
         gamma: float = 0.99,
         n: int = 2,
-        action_dim = 9
 ) -> (np.ndarray, np.ndarray):
     q = {} 
     model = {}
-    if eval_results:
-    	directory = 'Data/'
-    	if not os.path.exists(directory):
-    		os.makedirs(directory)
-    	results_file = open(directory+'dyna_q_control_results.txt', "w") 
+
+    action_dim = 9
 
     for episode_id in range(episodes_count):
         s = reset_func()
@@ -760,84 +961,15 @@ def dyna_q_control(
                 # update
                 delta = r + gamma * q[s_p].max() - q[s_][a_]
                 q[s_][a_] += alpha * delta
-        if eval_results:
-        	pi = {} # np.zeros_like(q)
-        	for s in q.keys():
-        		possible_actions = get_possible_actions(s)
-        		if not is_terminal_func(s):
-        			pi[s] = np.zeros(action_dim)
-        			pi[s][np.argmax(q[s])] = 1.0
-        	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-        	results_file.write(f"{successes} {fails} {steps} {rewards}\n") 
 
 
 
-    if eval_results:
-    	results_file.close()
-    else:
-	    pi = {} # np.zeros_like(q)
-	    for s in q.keys():
-	        possible_actions = get_possible_actions(s)
-	        if not is_terminal_func(s):
-	            pi[s] = np.zeros(action_dim) 
+    pi = {} # np.zeros_like(q)
+    for s in q.keys():
+        possible_actions = get_possible_actions(s)
+        if not is_terminal_func(s):
+            pi[s] = np.zeros(action_dim) 
 
-	            pi[s][np.argmax(q[s])] = 1.0 
+            pi[s][np.argmax(q[s])] = 1.0 
 
     return q, pi
-
-
-def reinforce(reset_func: Callable,
-        step_func: Callable,
-        get_possible_actions: Callable,
-        episodes_count: int = 10000,
-        max_steps_per_episode: int = 10,
-        eval_results: bool = True,
-        epsilon: float = 0.2,
-        alpha: float = 0.1,
-        gamma: float = 0.99,
-        state_dim = 1,
-        action_dim = 2):
-
-    weight = np.random.rand(state_dim, action_dim)
-    episode_rewards = []
-
-    for episode_id in range(episodes_count):
-
-    	score = 0
-
-    	s = reset_func()[None, :]
-    	rewards = []
-    	gradients = []
-    	t = 0
-    	done = False
-
-    	while not done and t < max_steps_per_episode:
-    		t += 1
-    		#print(s)
-    		Pi  = softmax_policy(weight, s)
-    		a = np.random.choice(action_dim,p=Pi[0])
-    		s_p, r, done, _ = step_func(a)
-    		
-
-    		rewards.append(r)
-    		s_p = s_p
-    		s_p = s_p[None, :]
-    		dl = softmax_gradient(Pi)[a, :] / Pi[0, a]
-    		gradients.append(s.T.dot(dl[None, :]))
-    		s = s_p
-    	score = t
-    	# Update the weight
-    	for i in range(len(rewards)):
-    		tab = []
-    		for t , r in enumerate(rewards[i:]):
-    			tab += [r * gamma ** t]
-    		weight += alpha * gradients[i] * sum(tab)
-
-    	episode_rewards.append(score)
-    	print("EP: " + str(episode_id) + " Score: " + str(score) + "         ",end="\r", flush=False) 
-
-    plt.plot(np.arange(episodes_count),episode_rewards)
-    plt.show()
-    return Pi
-
-

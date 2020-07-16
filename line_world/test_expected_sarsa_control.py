@@ -1,6 +1,5 @@
 from algorithms import *
-from grid_world import *
-import os
+from line_world import *
 
 if __name__ == "__main__":
     Q, Pi = tabular_expected_sarsa_control(
@@ -10,6 +9,5 @@ if __name__ == "__main__":
                                   epsilon=0.75,
                                   max_steps_per_episode=100,
                                   action_dim=action_dim)
-    
     print(Q)
     print(Pi)

@@ -1,9 +1,12 @@
-from algorithms import tabular_sarsa_control
-from line_world import S, A, is_terminal, step, reset
+from algorithms import *
+from line_world import *
 
 if __name__ == "__main__":
-    Q, Pi = tabular_sarsa_control(len(S), len(A),
-                                  reset,
-                                  is_terminal, step)
+    Q, Pi = tabular_sarsa_control(reset,
+                                  is_terminal, step,
+                                  get_possible_actions,
+                                  epsilon=0.2,
+                                  max_steps_per_episode=100,
+                                  action_dim = 2)
     print(Q)
     print(Pi)

@@ -71,8 +71,29 @@ def array_to_str(state):
 		str_+=state[i]
 	return str_
 
+def str_to_array(state):
+	array = []
+	for i in state:
+		array += [i]
+	return array
 
 
+def get_random_state():
+	global current_state
+	save_current = current_state
+	state = reset()
+	done = False
+	states = []
+	while not done:
+		action = random.choice(get_possible_actions(state))
+		state, reward, done, _ = step(action)
+		states.append(state)
+	current_state = save_current
+	return random.choice(states[:-1])
+
+def set_current_state(state):
+	global current_state
+	current_state = str_to_array(state)
 
 def is_successfull(state):
 	for i in range(3):
@@ -105,6 +126,7 @@ def step(action):
 	current_state[action] = marks[player_id] # Le joueur 'player_id' coche la case 'action'
 	
 	done = is_terminal(current_state)
+	info = {}
 	#assert player_id==0
 
 	if done:
@@ -140,5 +162,5 @@ def step(action):
 	if human_player:
 		render()
 
-	return array_to_str(current_state), reward, done
+	return array_to_str(current_state), reward, done, info
 
