@@ -1,15 +1,15 @@
 from tic_tac_toe_world import *
 from typing import Callable
-from utils import step_until_the_end_of_the_episode_and_return_history_v2
 from algorithms import *
 
 
 
 if __name__ == "__main__":
-    Q, Pi = off_policy_monte_carlo_control_v2(reset,
+    Q, Pi = off_policy_monte_carlo_control(reset,
                                            is_terminal, step, get_possible_actions,
-                                           episodes_count=100000,
-                                           max_steps_per_episode=10)
+                                           episodes_count=50000,
+                                           max_steps_per_episode=10,
+                                           eval_results = True)
     # print(Q)
     # print(Pi)
 

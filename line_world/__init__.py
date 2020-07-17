@@ -2,7 +2,7 @@ from typing import Callable
 
 import numpy as np
 
-num_states = 7
+num_states = 50
 S = np.arange(num_states)
 A = np.array([0, 1])  # 0: left, 1 : right
 T = np.array([0, num_states - 1])

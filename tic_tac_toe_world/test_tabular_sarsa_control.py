@@ -8,6 +8,8 @@ if __name__ == "__main__":
     Q, Pi = tabular_sarsa_control(reset,
                                   is_terminal, step,
                                   get_possible_actions,
+                                  eval_results = True,
+                                  episodes_count=50000,
                                   epsilon=0.2,
                                   max_steps_per_episode=10)
     print(Q)

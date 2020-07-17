@@ -7,7 +7,8 @@ if __name__ == "__main__":
     Q, Pi = on_policy_first_visit_monte_carlo_control(reset,
                                                       is_terminal, step,
                                                       get_possible_actions,
-                                                      episodes_count=100000,
+                                                      eval_results = True,
+                                                      episodes_count=50000,
                                                       max_steps_per_episode=10)
     # print(Q)
     # print(Pi)

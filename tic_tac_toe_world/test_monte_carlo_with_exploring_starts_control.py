@@ -1,13 +1,16 @@
 from tic_tac_toe_world import *
 from typing import Callable
-from utils import step_until_the_end_of_the_episode_and_return_history_v2
 from algorithms import *
 
 
 
 if __name__ == "__main__":
 	action_dim = 9
-	Q, Pi = monte_carlo_with_exploring_starts_control_v2(is_terminal, step, reset, get_possible_actions, get_random_state, set_current_state, episodes_count=10000, max_steps_per_episode=100)
+	Q, Pi = monte_carlo_with_exploring_starts_control(is_terminal, step, reset, get_possible_actions,
+													  get_random_state, set_current_state, 
+													  episodes_count=50000,
+													  eval_results = True,
+													  max_steps_per_episode=100)
 
 	done = False
 	state = reset()

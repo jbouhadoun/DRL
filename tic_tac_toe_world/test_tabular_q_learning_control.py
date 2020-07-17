@@ -9,6 +9,7 @@ if __name__ == "__main__":
                                        is_terminal, step,
                                        get_possible_actions,
                                        epsilon=0.75,
+                                       episodes_count = 50000,
                                        max_steps_per_episode=100,
                                        eval_results = True )
     print(Q)

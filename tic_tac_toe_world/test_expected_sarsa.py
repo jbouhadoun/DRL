@@ -5,10 +5,12 @@ from algorithms import *
 
 
 if __name__ == "__main__":
-    Q, Pi = tabular_expected_sarsa_control_v2(reset,
+    Q, Pi = tabular_expected_sarsa_control(reset,
                                   is_terminal, step,
                                   get_possible_actions,
                                   epsilon=0.2,
+                                  episodes_count = 50000,
+                                  eval_results=True,
                                   max_steps_per_episode=10)
     print(Q)
     print(Pi)

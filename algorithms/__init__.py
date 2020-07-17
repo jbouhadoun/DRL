@@ -47,8 +47,13 @@ def policy_iteration(
         A: np.ndarray,
         P: np.ndarray,
         T: np.ndarray,
+        reset_func: Callable,
+        step_func: Callable,
+        get_possible_actions: Callable,
         gamma: float = 0.99,
-        theta: float = 0.000001
+        theta: float = 0.000001,
+        eval_results: bool = True,
+        action_dim: int = 2,
 ) -> (np.ndarray, np.ndarray):
     Pi = tabular_uniform_random_policy(S.shape[0], A.shape[0])
     V = np.random.random((S.shape[0],))
@@ -59,13 +64,28 @@ def policy_iteration(
 
     print("Policy: ")
     print(Pi)
+
+    pi = {}
+    if eval_results:
+    	pi = {}
+    	directory = 'Data/'
+    	if not os.path.exists(directory):
+    		os.makedirs(directory)
+    	results_file = open(directory+'policy_iteration_results.txt', "a") 
+    	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
+    	results_file.write(f"0 {successes} {fails} {steps} {rewards}\n")
+    e=0
     while True:
         # Policy evalutation
         V = iterative_policy_evaluation(S, A, P, T, Pi, gamma, theta, V)
+        
+        e += 1
 
         # Policy impovement
         policy_stable = True
+
         for s in S:
+
             old_action = np.argmax(Pi[s])
             best_action = 0
             best_action_score = -9999999999999
@@ -79,9 +99,15 @@ def policy_iteration(
                     best_action = a
                     best_action_score = tmp_sum
             Pi[s] = 0.0
+            pi[s] = np.zeros(action_dim)
+            pi[s][best_action] = 1.0
             Pi[s, best_action] = 1.0
             if best_action != old_action:
                 policy_stable = False
+        if eval_results:
+            	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
+            	results_file.write(f"{e} {successes} {fails} {steps} {rewards}\n")
+
         if policy_stable:
             break
         print("Value: ")
@@ -89,6 +115,9 @@ def policy_iteration(
 
         print("Policy: ")
         print(Pi)
+
+    if eval_results:
+        results_file.close()
 
     return V, Pi
 
@@ -98,16 +127,31 @@ def value_iteration(
         A: np.ndarray,
         P: np.ndarray,
         T: np.ndarray,
+        reset_func: Callable,
+        step_func: Callable,
+        get_possible_actions: Callable,
         gamma: float = 0.99,
-        theta: float = 0.000001
+        theta: float = 0.000001,
+        eval_results: bool = True,
+        action_dim: int = 2,
 ) -> (np.ndarray, np.ndarray):
     assert 0 <= gamma <= 1
     assert theta > 0
+    if eval_results:
+    	pi = {}
+    	directory = 'Data/'
+    	if not os.path.exists(directory):
+    		os.makedirs(directory)
+    	results_file = open(directory+'value_iteration_results.txt', "a") 
+    	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
+    	results_file.write(f"0 {successes} {fails} {steps} {rewards}\n")
 
     V = np.random.random((S.shape[0],))
     V[T] = 0.0
+    e = 0
     while True:
         delta = 0
+        e+=1
         for s in S:
             v_temp = V[s]
             best_score = -9999999999
@@ -123,6 +167,30 @@ def value_iteration(
             delta = np.maximum(delta, np.abs(V[s] - v_temp))
         if delta < theta:
             break
+        if eval_results:
+        	pi = {}
+        	Pi = np.zeros((S.shape[0], A.shape[0]))
+        	for s in S:
+		        best_action = 0
+		        best_action_score = -9999999999999
+		        for a in A:
+		            tmp_sum = 0
+		            for s_p in S:
+		                tmp_sum += P[s, a, s_p, 0] * (
+		                        P[s, a, s_p, 1] + gamma * V[s_p]
+		                )
+		            if tmp_sum > best_action_score:
+		                best_action = a
+		                best_action_score = tmp_sum
+		        Pi[s] = 0.0
+		        Pi[s, best_action] = 1.0
+		        pi[s] = np.zeros(action_dim)
+		        pi[s][best_action]=1.0
+
+	        successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
+	        results_file.write(f"{e} {successes} {fails} {steps} {rewards}\n")
+
+
 
     Pi = np.zeros((S.shape[0], A.shape[0]))
     for s in S:
@@ -139,6 +207,8 @@ def value_iteration(
                 best_action_score = tmp_sum
         Pi[s] = 0.0
         Pi[s, best_action] = 1.0
+    if eval_results:
+    	results_file.close()
     return V, Pi
 
 
@@ -148,7 +218,7 @@ def first_visit_monte_carlo_prediction(
         reset_func: Callable,
         step_func: Callable,
         get_possible_actions: Callable,
-        episodes_count: int = 100000,
+        episodes_count: int = 1000,
         max_steps_per_episode: int = 100,
         gamma: float = 0.99,
         exploring_start: bool = False,
@@ -191,7 +261,7 @@ def monte_carlo_with_exploring_starts_control(
         get_random_state: Callable,
         set_current_state: Callable,
         episodes_count: int = 1000,
-        max_steps_per_episode: int = 10,
+        max_steps_per_episode: int = 100,
         eval_results = True,
         gamma: float = 0.99,
         action_dim: int = 9,
@@ -204,17 +274,17 @@ def monte_carlo_with_exploring_starts_control(
     	directory = 'Data/'
     	if not os.path.exists(directory):
     		os.makedirs(directory)
-    	results_file = open(directory+'monte_carlo_with_exploring_starts_control_results.txt', "w") 
+    	results_file = open(directory+'monte_carlo_with_exploring_starts_control_results.txt', "a") 
     	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-    	results_file.write(f"{successes} {fails} {steps} {rewards}\n")
+    	results_file.write(f"0 {successes} {fails} {steps} {rewards}\n")
 
     returns = {}
     returns_count = {} 
 
     for episode_id in range(episodes_count):
-        # s0 = get_random_state() 
-        # set_current_state(s0)
-        s0 = reset_func()
+        s0 = get_random_state() 
+        set_current_state(s0)
+        #s0 = reset_func()
 
 
         if is_terminal_func(s0):
@@ -258,7 +328,7 @@ def monte_carlo_with_exploring_starts_control(
             pi[st][np.argmax(q[st])] = 1.0
         if eval_results:
         	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-        	results_file.write(f"{successes} {fails} {steps} {rewards}\n")
+        	results_file.write(f"{episode_id} {successes} {fails} {steps} {rewards}\n")
     if eval_results:
     	results_file.close()
     return q, pi
@@ -271,7 +341,7 @@ def on_policy_first_visit_monte_carlo_control(
         step_func: Callable,
         get_possible_actions: Callable,
         episodes_count: int = 1000,
-        max_steps_per_episode: int = 10,
+        max_steps_per_episode: int = 100,
         epsilon: float = 0.2,
         eval_results: bool = True,
         gamma: float = 0.99,
@@ -279,12 +349,14 @@ def on_policy_first_visit_monte_carlo_control(
 ) -> (np.ndarray, np.ndarray):
 
     pi = {}
+
     q = {}
     if eval_results:
+    	pi_ = {}
     	directory = 'Data/'
     	if not os.path.exists(directory):
     		os.makedirs(directory)
-    	results_file = open(directory+'on_policy_first_visit_monte_carlo_control_results.txt', "w") 
+    	results_file = open(directory+'on_policy_first_visit_monte_carlo_control_results.txt', "a") 
 
     returns = {} # np.zeros((states_count, actions_count))
     returns_count = {} # np.zeros((states_count, actions_count))
@@ -322,8 +394,10 @@ def on_policy_first_visit_monte_carlo_control(
                     q[st][a] = -999999
             pi[st][np.argmax(q[st])] = 1.0 - epsilon + epsilon / len(possible_actions)
             if eval_results:
-            	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-            	results_file.write(f"{successes} {fails} {steps} {rewards}\n")
+            	pi_[st] = np.zeros(action_dim)
+            	pi_[st][np.argmax(q[st])] = 1.0 
+            	successes, fails, steps, rewards = eval(pi_, reset_func, step_func, get_possible_actions, action_dim = action_dim)
+            	results_file.write(f"{episode_id} {successes} {fails} {steps} {rewards}\n")
 
     if eval_results:
     	results_file.close()
@@ -338,8 +412,8 @@ def off_policy_monte_carlo_control(
         is_terminal_func: Callable,
         step_func: Callable,
         get_possible_actions: Callable,
-        episodes_count: int = 10000,
-        max_steps_per_episode: int = 10,
+        episodes_count: int = 1000,
+        max_steps_per_episode: int = 100,
         epsilon: float = 0.2,
         eval_results: bool = True,
         gamma: float = 0.99,
@@ -355,7 +429,7 @@ def off_policy_monte_carlo_control(
     	directory = 'Data/'
     	if not os.path.exists(directory):
     		os.makedirs(directory)
-    	results_file = open(directory+'off_policy_monte_carlo_control_results.txt', "w") 
+    	results_file = open(directory+'off_policy_monte_carlo_control_results.txt', "a") 
 
     for episode_id in range(episodes_count):
         s0 = reset_func()
@@ -393,7 +467,7 @@ def off_policy_monte_carlo_control(
             W = W / b[st][at]
         if eval_results:
         	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-        	results_file.write(f"{successes} {fails} {steps} {rewards}\n")
+        	results_file.write(f"{episode_id} {successes} {fails} {steps} {rewards}\n")
 
     if eval_results:
     	results_file.close()
@@ -405,7 +479,7 @@ def tabular_td_zero_prediction(
         is_terminal_func: Callable,
         reset_func: Callable,
         step_func: Callable,
-        episodes_count: int = 100000,
+        episodes_count: int = 1000,
         eval_results: bool = True,
         max_steps_per_episode: int = 100,
         gamma: float = 0.99,
@@ -418,7 +492,7 @@ def tabular_td_zero_prediction(
     	directory = 'Data/'
     	if not os.path.exists(directory):
     		os.makedirs(directory)
-    	results_file = open(directory+'tabular_TD0_results.txt', "w") 
+    	results_file = open(directory+'tabular_TD0_results.txt', "a") 
     for s in states:
         if is_terminal_func(s):
             V[s] = 0
@@ -443,8 +517,8 @@ def tabular_sarsa_control(
         is_terminal_func: Callable,
         step_func: Callable,
         get_possible_actions: Callable,
-        episodes_count: int = 100000,
-        max_steps_per_episode: int = 10,
+        episodes_count: int = 1000,
+        max_steps_per_episode: int = 100,
         eval_results: bool = True,
         epsilon: float = 0.2,
         alpha: float = 0.1,
@@ -457,7 +531,7 @@ def tabular_sarsa_control(
     	directory = 'Data/'
     	if not os.path.exists(directory):
     		os.makedirs(directory)
-    	results_file = open(directory+'tabular_sarsa_results.txt', "w") 
+    	results_file = open(directory+'tabular_sarsa_results.txt', "a") 
 
     for episode_id in range(episodes_count):
 
@@ -504,13 +578,10 @@ def tabular_sarsa_control(
             	for s in q.keys():
             		possible_actions = get_possible_actions(s)
             		if not is_terminal_func(s):
-            			pi[s] = np.ones(action_dim) * (epsilon / len(possible_actions))
-            			for action in range(action_dim):
-            				if action not in possible_actions:
-            					pi[s][action] = 0
-            			pi[s][np.argmax(q[s])] = 1.0 - epsilon + epsilon / len(possible_actions)
+            			pi[s] = np.zeros(action_dim)
+            			pi[s][np.argmax(q[s])] = 1.0 
             	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-            	results_file.write(f"{successes} {fails} {steps} {rewards}\n")
+            	results_file.write(f"{episode_id} {successes} {fails} {steps} {rewards}\n")
 
 
     if eval_results:
@@ -533,9 +604,9 @@ def tabular_expected_sarsa_control(
         is_terminal_func: Callable,
         step_func: Callable,
         get_possible_actions: Callable,
-        episodes_count: int = 100,
+        episodes_count: int = 1000,
         max_steps_per_episode: int = 100,
-        epsilon: float = 0.2,
+        epsilon: float = 0.1,
         eval_results: bool = True,
         alpha: float = 0.1,
         gamma: float = 0.99,
@@ -544,9 +615,12 @@ def tabular_expected_sarsa_control(
     q = {}
     if eval_results:
     	directory = 'Data/'
+    	pi = {}
     	if not os.path.exists(directory):
     		os.makedirs(directory)
-    	results_file = open(directory+'expected_sarsa_results.txt', "w") 
+    	results_file = open(directory+'expected_sarsa_results.txt', "a") 
+    	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
+    	results_file.write(f"0 {successes} {fails} {steps} {rewards}\n")
 
     for episode_id in range(episodes_count):
 
@@ -592,14 +666,14 @@ def tabular_expected_sarsa_control(
             	for s in q.keys():
             		possible_actions = get_possible_actions(s)
             		if not is_terminal_func(s):
-            			pi[s] = np.ones(action_dim) * (epsilon / len(possible_actions))
+            			pi[s] = np.zeros(action_dim)
             			for action in range(action_dim):
             				if action not in possible_actions:
             					pi[s][action] = 0
             					q[s][action] = -999999
-            			pi[s][np.argmax(q[s])] = 1.0 - epsilon + epsilon / len(possible_actions)
+            			pi[s][np.argmax(q[s])] = 1.0 
             	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-            	results_file.write(f"{successes} {fails} {steps} {rewards}\n")
+            	results_file.write(f"{episode_id} {successes} {fails} {steps} {rewards}\n")
 
     if not eval_results:
 	    pi = {} 
@@ -623,8 +697,8 @@ def tabular_q_learning_control(
         is_terminal_func: Callable,
         step_func: Callable,
         get_possible_actions: Callable,
-        episodes_count: int = 50,
-        max_steps_per_episode: int = 10,
+        episodes_count: int = 1000,
+        max_steps_per_episode: int = 100,
         epsilon: float = 0.2,
         alpha: float = 0.1,
         gamma: float = 0.99,
@@ -633,11 +707,14 @@ def tabular_q_learning_control(
 ) -> (np.ndarray, np.ndarray):
 
     q = {} 
+    pi = {}
     if eval_results:
     	directory = 'Data/'
     	if not os.path.exists(directory):
     		os.makedirs(directory)
-    	results_file = open(directory+'tabular_q_learning_results.txt', "w")
+    	results_file = open(directory+'tabular_q_learning_results.txt', "a")
+    	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
+    	results_file.write(f"0 {successes} {fails} {steps} {rewards}\n")
 
     for episode_id in range(episodes_count):
         s = reset_func()
@@ -674,7 +751,7 @@ def tabular_q_learning_control(
                 pi[s] = np.zeros(action_dim)
                 pi[s][np.argmax(q[s])] = 1.0
             successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-            results_file.write(f"{successes} {fails} {steps} {rewards}\n")
+            results_file.write(f"{episode_id} {successes} {fails} {steps} {rewards}\n")
 
     if not eval_results:
         pi = {}
@@ -696,21 +773,24 @@ def dyna_q_control(
         step_func: Callable,
         get_possible_actions: Callable,
         episodes_count: int = 10000,
-        max_steps_per_episode: int = 10,
+        max_steps_per_episode: int = 100,
         eval_results: bool = True,
-        epsilon: float = 0.2,
+        epsilon: float = 0.2, # to explore , 
         alpha: float = 0.1,
-        gamma: float = 0.99,
-        n: int = 2,
+        gamma: float = 0,
+        n: int = 10,
         action_dim = 9
 ) -> (np.ndarray, np.ndarray):
     q = {} 
     model = {}
+    pi = {}
     if eval_results:
-    	directory = 'Data/'
+    	directory = 'Datahp/'
     	if not os.path.exists(directory):
     		os.makedirs(directory)
-    	results_file = open(directory+'dyna_q_control_results.txt', "w") 
+    	results_file = open(directory+'dyna_q_control_results.txt', "a")
+    	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
+    	results_file.write(f"0 {successes} {fails} {steps} {rewards}\n")  
 
     for episode_id in range(episodes_count):
         s = reset_func()
@@ -768,7 +848,7 @@ def dyna_q_control(
         			pi[s] = np.zeros(action_dim)
         			pi[s][np.argmax(q[s])] = 1.0
         	successes, fails, steps, rewards = eval(pi, reset_func, step_func, get_possible_actions, action_dim = action_dim)
-        	results_file.write(f"{successes} {fails} {steps} {rewards}\n") 
+        	results_file.write(f"{episode_id} {successes} {fails} {steps} {rewards}\n") 
 
 
 
@@ -790,20 +870,24 @@ def reinforce(reset_func: Callable,
         step_func: Callable,
         get_possible_actions: Callable,
         episodes_count: int = 10000,
-        max_steps_per_episode: int = 10,
+        max_steps_per_episode: int = 100,
         eval_results: bool = True,
         epsilon: float = 0.2,
         alpha: float = 0.1,
         gamma: float = 0.99,
         state_dim = 1,
-        action_dim = 2):
+        action_dim = 4):
 
     weight = np.random.rand(state_dim, action_dim)
     episode_rewards = []
 
-    for episode_id in range(episodes_count):
+    if eval_results:
+    	directory = 'Data/'
+    	if not os.path.exists(directory):
+    		os.makedirs(directory)
+    	results_file = open(directory+'reinforce_results.txt', "w") 
 
-    	score = 0
+    for episode_id in range(episodes_count):
 
     	s = reset_func()[None, :]
     	rewards = []
@@ -825,19 +909,17 @@ def reinforce(reset_func: Callable,
     		dl = softmax_gradient(Pi)[a, :] / Pi[0, a]
     		gradients.append(s.T.dot(dl[None, :]))
     		s = s_p
-    	score = t
+    	if eval_results:
+    		results_file.write(f'{t} \n')
+
     	# Update the weight
     	for i in range(len(rewards)):
     		tab = []
     		for t , r in enumerate(rewards[i:]):
     			tab += [r * gamma ** t]
     		weight += alpha * gradients[i] * sum(tab)
-
-    	episode_rewards.append(score)
-    	print("EP: " + str(episode_id) + " Score: " + str(score) + "         ",end="\r", flush=False) 
-
-    plt.plot(np.arange(episodes_count),episode_rewards)
-    plt.show()
+    if eval_results:
+    	results_file.close()
     return Pi
 
 
